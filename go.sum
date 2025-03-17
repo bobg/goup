@@ -1,0 +1,6 @@
+github.com/bobg/errors v1.1.0 h1:gsVanPzJMpZQpwY+27/GQYElZez5CuMYwiIpk2A3RGw=
+github.com/bobg/errors v1.1.0/go.mod h1:Q4775qBZpnte7EGFJqmvnlB1U4pkI1XmU3qxqdp7Zcc=
+github.com/bobg/goproxyclient v0.1.0 h1:x5KIpRSNG+JsJSzMBSHLjLNT3jI0Tu+n3XpnUmK1RmY=
+github.com/bobg/goproxyclient v0.1.0/go.mod h1:ctQAMWbOOjtFI9tyMn1+fycXGYjXxR7TdGnV7J0JYfk=
+golang.org/x/mod v0.24.0 h1:ZfthKaKaT4NrhGVZHO1/WDTwGES4De8KtWO0SIbNJMU=
+golang.org/x/mod v0.24.0/go.mod h1:IXM97Txy2VM4PJ3gI61r1YEk/gAj6zAHN3AdZt6S9Ww=
