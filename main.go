@@ -37,22 +37,43 @@ func run() error {
 	}
 
 	var (
-		upgradeable bool
-		qps         float64
+		all      bool
+		emitCmd  bool
+		emitJSON bool
+		showErrs bool
+		qps      float64
 	)
 
-	flag.StringVar(&goproxy, "proxy", goproxy, "Go module proxy URL")
-	flag.BoolVar(&upgradeable, "u", false, "show only upgradeable files")
+	flag.BoolVar(&all, "all", false, "show all files")
+	flag.BoolVar(&emitCmd, "cmd", false, "emit output as shell commands")
+	flag.BoolVar(&emitJSON, "json", false, "emit output as JSON")
+	flag.BoolVar(&showErrs, "errs", true, "show errors (default true, use -errs=false to suppress)")
 	flag.Float64Var(&qps, "rate", 2, "max queries per second to the proxy")
+	flag.StringVar(&goproxy, "proxy", goproxy, "Go module proxy URL")
 	flag.Parse()
+
+	if all && emitCmd {
+		return fmt.Errorf("cannot specify both -all and -cmd")
+	}
+	if emitCmd && emitJSON {
+		return fmt.Errorf("cannot specify both -cmd and -json")
+	}
 
 	var (
 		limiter = rate.NewLimiter(rate.Limit(qps), 1)
 		lt      = mid.LimitedTransport{L: limiter}
 		hc      = &http.Client{Transport: lt}
-		c       = controller{client: goproxyclient.New(goproxy, hc), upgradeable: upgradeable}
 		ctx     = context.Background()
 	)
+
+	c := controller{
+		all:      all,
+		emitCmd:  emitCmd,
+		emitJSON: emitJSON,
+		showErrs: showErrs,
+		client:   goproxyclient.New(goproxy, hc),
+	}
+
 	for _, arg := range flag.Args() {
 		info, err := os.Stat(arg)
 		if err != nil {
@@ -72,8 +93,8 @@ func run() error {
 }
 
 type controller struct {
-	client      *goproxyclient.Client
-	upgradeable bool
+	client                           *goproxyclient.Client
+	all, emitCmd, emitJSON, showErrs bool
 }
 
 func (c controller) doDir(ctx context.Context, dir string) error {
@@ -95,30 +116,71 @@ type output struct {
 	Available   string `json:"available"`
 	MainModule  string `json:"main_module"`
 	MainPackage string `json:"main_package"`
+	Error       string `json:"error,omitempty"`
 }
 
-func (c controller) doFile(ctx context.Context, file string) error {
-	info, err := buildinfo.ReadFile(file)
-	if err != nil {
-		return errors.Wrapf(err, "reading %s", file)
+func (c controller) doFile(ctx context.Context, file string) (err error) {
+	o := output{
+		File: file,
 	}
 
-	if c.upgradeable && !semver.IsValid(info.Main.Version) {
+	defer func() {
+		if !c.showErrs && o.Error != "" {
+			return
+		}
+		if !c.emitJSON && o.Error != "" {
+			fmt.Fprintf(os.Stderr, "%s: %s\n", file, o.Error)
+			return
+		}
+		if !c.all || c.emitCmd {
+			if !semver.IsValid(o.Installed) || !semver.IsValid(o.Available) {
+				return
+			}
+			if semver.Compare(o.Installed, o.Available) >= 0 {
+				return
+			}
+		}
+		if c.emitJSON {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			err = enc.Encode(o)
+			return
+		}
+		if c.emitCmd {
+			fmt.Printf("go install %s@%s\n", o.MainPackage, o.Available)
+			return
+		}
+		fmt.Printf("%s:", file)
+		if o.MainPackage != "" {
+			fmt.Printf(" package=%s", o.MainPackage)
+		}
+		if o.Installed != "" {
+			fmt.Printf(" installed=%s", o.Installed)
+		}
+		if o.Available != "" {
+			fmt.Printf(" available=%s", o.Available)
+		}
+		fmt.Print("\n")
+	}()
+
+	info, err := buildinfo.ReadFile(file)
+	if err != nil {
+		err = errors.Wrapf(err, "reading %s", file)
+		o.Error = err.Error()
 		return nil
 	}
+
+	o.Installed = info.Main.Version
+	o.MainModule = info.Main.Path
+	o.MainPackage = info.Path
 
 	// xxx check info.GoVersion, is it out of date?
 
 	versions, err := c.client.List(ctx, info.Main.Path)
 	if err != nil {
-		return errors.Wrapf(err, "listing versions for %s", info.Main.Path)
-	}
-
-	o := output{
-		File:        file,
-		Installed:   info.Main.Version,
-		MainModule:  info.Main.Path,
-		MainPackage: info.Path,
+		err = errors.Wrapf(err, "listing versions for %s", info.Main.Path)
+		o.Error = err.Error()
+		return nil
 	}
 
 	if len(versions) > 0 {
@@ -126,12 +188,5 @@ func (c controller) doFile(ctx context.Context, file string) error {
 		o.Available = versions[len(versions)-1]
 	}
 
-	if c.upgradeable && semver.Compare(o.Installed, o.Available) >= 0 {
-		return nil
-	}
-
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	err = enc.Encode(o)
-	return errors.Wrap(err, "encoding output")
+	return nil
 }
