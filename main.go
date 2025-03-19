@@ -93,7 +93,7 @@ func run() error {
 }
 
 type controller struct {
-	client                           *goproxyclient.Client
+	client                           goproxyclient.Client
 	all, emitCmd, emitJSON, showErrs bool
 }
 
