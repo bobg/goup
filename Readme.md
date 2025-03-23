@@ -23,14 +23,15 @@ Each ARG is the path to a Go binary or a directory of Go binaries (such as `~/go
 
 The flags and their meanings are:
 
-| flag       | meaning                                                                                     |
-|------------|---------------------------------------------------------------------------------------------|
-| -all       | Show info for all binaries (not just those that can be upgraded).                           |
-| -cmd       | Show output as shell commands for performing upgrades.                                      |
-| -json      | Show output as JSON objects.                                                                |
-| -errs      | Show files that encountered errors (default true; suppress with -errs=false).               |
-| -qps RATE  | Max queries per second to the Go module proxy.                                              |
-| -proxy URL | URL of the Go module proxy (default is the first element of $GOPROXY, or proxy.golang.org). |
+| flag       | meaning                                                                                                  |
+|------------|----------------------------------------------------------------------------------------------------------|
+| -all       | Show info for all binaries (not just those that can be upgraded).                                        |
+| -cmd       | Show output as shell commands for performing upgrades.                                                   |
+| -json      | Show output as JSON objects.                                                                             |
+| -errs      | Show files that encountered errors (default true; disable with -errs=false).                             |
+| -qps RATE  | Max queries per second to the Go module proxy.                                                           |
+| -pre       | Include prerelease versions in the output (default true; disable with -pre=false).                       |
+| -proxy URL | URL of the Go module proxy, or a sequence of proxies (default is $GOPROXY, or https://proxy.golang.org). |
 
 Normal output is a line like this:
 

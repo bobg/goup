@@ -10,9 +10,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/bobg/errors"
+	"github.com/bobg/go-generics/v4/slices"
 	"github.com/bobg/goproxyclient"
 	"github.com/bobg/mid"
 	"golang.org/x/mod/semver"
@@ -31,23 +31,21 @@ func run() error {
 	if goproxy == "" {
 		goproxy = "https://proxy.golang.org"
 	}
-	parts := strings.Split(goproxy, ",")
-	if len(parts) > 1 {
-		goproxy = parts[0]
-	}
 
 	var (
 		all      bool
 		emitCmd  bool
 		emitJSON bool
 		showErrs bool
+		pre      bool
 		qps      float64
 	)
 
 	flag.BoolVar(&all, "all", false, "show all files")
 	flag.BoolVar(&emitCmd, "cmd", false, "emit output as shell commands")
 	flag.BoolVar(&emitJSON, "json", false, "emit output as JSON")
-	flag.BoolVar(&showErrs, "errs", true, "show errors (default true, use -errs=false to suppress)")
+	flag.BoolVar(&pre, "pre", true, "include prerelease versions (default true, use -pre=false to disable)")
+	flag.BoolVar(&showErrs, "errs", true, "show errors (default true, use -errs=false to disable)")
 	flag.Float64Var(&qps, "rate", 2, "max queries per second to the proxy")
 	flag.StringVar(&goproxy, "proxy", goproxy, "Go module proxy URL")
 	flag.Parse()
@@ -66,12 +64,18 @@ func run() error {
 		ctx     = context.Background()
 	)
 
+	client, err := goproxyclient.NewMulti(goproxy, hc)
+	if err != nil {
+		return errors.Wrap(err, "creating client")
+	}
+
 	c := controller{
 		all:      all,
 		emitCmd:  emitCmd,
 		emitJSON: emitJSON,
+		pre:      pre,
 		showErrs: showErrs,
-		client:   goproxyclient.New(goproxy, hc),
+		client:   client,
 	}
 
 	for _, arg := range flag.Args() {
@@ -93,8 +97,8 @@ func run() error {
 }
 
 type controller struct {
-	client                           goproxyclient.Client
-	all, emitCmd, emitJSON, showErrs bool
+	client                                goproxyclient.Client
+	all, emitCmd, emitJSON, pre, showErrs bool
 }
 
 func (c controller) doDir(ctx context.Context, dir string) error {
@@ -116,6 +120,7 @@ type output struct {
 	Available   string `json:"available"`
 	MainModule  string `json:"main_module"`
 	MainPackage string `json:"main_package"`
+	Command     string `json:"command"`
 	Error       string `json:"error,omitempty"`
 }
 
@@ -147,7 +152,7 @@ func (c controller) doFile(ctx context.Context, file string) (err error) {
 			return
 		}
 		if c.emitCmd {
-			fmt.Printf("go install %s@%s\n", o.MainPackage, o.Available)
+			fmt.Println(o.Command)
 			return
 		}
 		fmt.Printf("%s:", file)
@@ -183,9 +188,16 @@ func (c controller) doFile(ctx context.Context, file string) (err error) {
 		return nil
 	}
 
+	if !c.pre {
+		versions = slices.Filter(versions, func(v string) bool {
+			return semver.Prerelease(v) == ""
+		})
+	}
+
 	if len(versions) > 0 {
 		semver.Sort(versions)
 		o.Available = versions[len(versions)-1]
+		o.Command = fmt.Sprintf("go install -o %s %s@%s", file, o.MainPackage, o.Available)
 	}
 
 	return nil
