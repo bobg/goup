@@ -42,7 +42,7 @@ Normal output is a line like this:
 Selecting `-cmd` changes that to:
 
 ```
-go install github.com/bobg/decouple/cmd/decouple@v0.5.0
+go install -o /Users/bobg/go/bin/decouple github.com/bobg/decouple/cmd/decouple@v0.5.0
 ```
 
 Selecting `-json` changes it to:
@@ -53,6 +53,7 @@ Selecting `-json` changes it to:
   "installed": "v0.4.5",
   "available": "v0.5.0",
   "main_module": "github.com/bobg/decouple",
-  "main_package": "github.com/bobg/decouple/cmd/decouple"
+  "main_package": "github.com/bobg/decouple/cmd/decouple",
+  "command": "go install -o /Users/bobg/go/bin/decouple github.com/bobg/decouple/cmd/decouple@v0.5.0"
 }
 ```

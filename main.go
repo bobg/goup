@@ -62,21 +62,15 @@ func run() error {
 		lt      = mid.LimitedTransport{L: limiter}
 		hc      = &http.Client{Transport: lt}
 		ctx     = context.Background()
+		c       = controller{
+			all:      all,
+			emitCmd:  emitCmd,
+			emitJSON: emitJSON,
+			pre:      pre,
+			showErrs: showErrs,
+			client:   goproxyclient.New(goproxy, hc),
+		}
 	)
-
-	client, err := goproxyclient.NewMulti(goproxy, hc)
-	if err != nil {
-		return errors.Wrap(err, "creating client")
-	}
-
-	c := controller{
-		all:      all,
-		emitCmd:  emitCmd,
-		emitJSON: emitJSON,
-		pre:      pre,
-		showErrs: showErrs,
-		client:   client,
-	}
 
 	for _, arg := range flag.Args() {
 		info, err := os.Stat(arg)
