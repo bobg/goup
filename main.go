@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 
 	"github.com/bobg/errors"
@@ -191,8 +192,35 @@ func (c controller) doFile(ctx context.Context, file string) (err error) {
 	if len(versions) > 0 {
 		semver.Sort(versions)
 		o.Available = versions[len(versions)-1]
-		o.Command = fmt.Sprintf("go install -o %s %s@%s", file, o.MainPackage, o.Available)
+		o.Command = commandFor(o.MainPackage, o.Available, file)
 	}
 
 	return nil
+}
+
+func commandFor(pkg, ver, dest string) string {
+	destdir, destfile := filepath.Split(dest)
+	destdir = filepath.Clean(destdir)
+	pkgbase := path.Base(pkg)
+	gobin := os.Getenv("GOBIN")
+	if gobin == "" {
+		gopath := os.Getenv("GOPATH")
+		if gopath == "" {
+			home, _ := os.UserHomeDir()
+			gopath = filepath.Join(home, "go")
+		}
+		gobin = filepath.Join(gopath, "bin")
+	}
+
+	if destdir == gobin && destfile == pkgbase {
+		return fmt.Sprintf("go install %s@%s", pkg, ver)
+	}
+
+	if destfile == pkgbase {
+		return fmt.Sprintf("GOBIN=%s go install %s@%s", destdir, pkg, ver)
+	}
+
+	tmpdir := os.TempDir()
+	tmpfile := filepath.Join(tmpdir, pkgbase)
+	return fmt.Sprintf("GOBIN=%s go install %s@%s && mv %s %s", tmpdir, pkg, ver, tmpfile, dest)
 }
